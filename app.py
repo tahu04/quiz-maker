@@ -123,9 +123,9 @@ if st.session_state.class_mode:
     quiz = quiz_data[current]
     
     st.progress((current + 1) / total)
-    st.markdown(f"<div style='text-align:right; color:#64748b;'>문제 {current + 1} / {total}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:right; color:#64748b; margin-bottom: 1rem;'>문제 {current + 1} / {total}</div>", unsafe_allow_html=True)
 
-    st.markdown(f"""<div class="class-card">""", unsafe_allow_html=True)
+    st.markdown("""<div class="class-card">""", unsafe_allow_html=True)
     
     # === 문제와 타이머를 좌우로 배치 ===
     question_col, timer_col = st.columns([2, 1])
@@ -300,4 +300,4 @@ else:
                             st.write(f"- {opt}")
                     st.info(f"해설: {quiz['explanation']}")
         else:
-            st.info("�← 왼쪽에서 지문을 입력하고 생성 버튼을 눌러주세요.")
+            st.info("👈 왼쪽에서 지문을 입력하고 생성 버튼을 눌러주세요.")
