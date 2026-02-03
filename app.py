@@ -1,7 +1,6 @@
 import streamlit as st
 import openai
 import json
-import time
 
 # ============================================================
 # 1. 페이지 설정
@@ -68,7 +67,7 @@ def create_text_file(quiz_data, text_input):
     content = "📝 AI가 만든 지문 3초 퀴즈\n"
     content += "=" * 50 + "\n\n"
     content += "[지문 내용]\n"
-    content += f"{text_input[:100]}...\n\n" # 지문 앞부분만 살짝
+    content += f"{text_input[:100]}...\n\n"
     content += "-" * 50 + "\n\n"
     
     # 문제 부분
@@ -175,4 +174,54 @@ else:
         with c2: num_questions = st.selectbox("문항 수", [3, 5], index=0)
         
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button
+        if st.button("🚀 퀴즈 생성하기", use_container_width=True, type="primary"):
+            if not api_key:
+                st.error("API 키를 입력해주세요.")
+            elif len(text_input) < 10:
+                st.warning("지문을 더 길게 입력해주세요.")
+            else:
+                with st.spinner("AI 선생님이 문제를 출제중입니다..."):
+                    quiz_data = generate_real_quiz(text_input, difficulty, num_questions, api_key)
+                    if quiz_data:
+                        st.session_state.quiz_data = quiz_data
+                        st.session_state.class_mode = False
+                        st.success(f"{len(quiz_data)}문제 생성 완료!")
+                        st.rerun()
+
+    with right_col:
+        st.markdown("### 📋 생성 결과 확인")
+        
+        if st.session_state.quiz_data:
+            # === 버튼 2개 배치 (수업모드 / 다운로드) ===
+            b1, b2 = st.columns(2)
+            with b1:
+                # [에러가 났던 부분: 괄호와 내용이 완벽하게 들어갔는지 확인하세요]
+                if st.button("👨‍🏫 수업 모드 시작", use_container_width=True, type="secondary"):
+                    st.session_state.class_mode = True
+                    st.session_state.current_idx = 0
+                    st.session_state.show_answer = False
+                    st.rerun()
+            with b2:
+                # 텍스트 파일 생성
+                txt_data = create_text_file(st.session_state.quiz_data, text_input)
+                st.download_button(
+                    label="💾 퀴즈 다운로드 (.txt)",
+                    data=txt_data,
+                    file_name="my_quiz.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            st.divider()
+            
+            for idx, quiz in enumerate(st.session_state.quiz_data, 1):
+                with st.expander(f"문제 {idx}. {quiz['question'][:20]}..."):
+                    st.write(f"**Q. {quiz['question']}**")
+                    for i, opt in enumerate(quiz['options']):
+                        if i == quiz['answer']:
+                            st.write(f"- :green[{opt} (정답)]")
+                        else:
+                            st.write(f"- {opt}")
+                    st.info(f"해설: {quiz['explanation']}")
+        else:
+            st.info("👈 왼쪽에서 지문을 입력하고 생성 버튼을 눌러주세요.")
