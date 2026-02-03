@@ -1,6 +1,7 @@
 import streamlit as st
 import openai
 import json
+import time
 
 # ============================================================
 # 1. 페이지 설정
@@ -23,6 +24,10 @@ if 'class_mode' not in st.session_state:
     st.session_state.class_mode = False
 if 'show_answer' not in st.session_state:
     st.session_state.show_answer = False
+if 'timer_started' not in st.session_state:
+    st.session_state.timer_started = False
+if 'timer_finished' not in st.session_state:
+    st.session_state.timer_finished = False
 
 # ============================================================
 # 3. 유틸리티 함수 (파싱, AI호출, 다운로드 파일 생성)
@@ -62,7 +67,6 @@ def generate_real_quiz(text, difficulty, num_questions, api_key):
         st.error(f"오류: {e}")
         return []
 
-# [NEW] 텍스트 파일 생성 함수
 def create_text_file(quiz_data, text_input):
     content = "📝 AI가 만든 지문 3초 퀴즈\n"
     content += "=" * 50 + "\n\n"
@@ -70,7 +74,6 @@ def create_text_file(quiz_data, text_input):
     content += f"{text_input[:100]}...\n\n"
     content += "-" * 50 + "\n\n"
     
-    # 문제 부분
     content += "[학습지: 학생용]\n\n"
     for idx, quiz in enumerate(quiz_data, 1):
         content += f"Q{idx}. {quiz['question']}\n"
@@ -80,7 +83,6 @@ def create_text_file(quiz_data, text_input):
     
     content += "=" * 50 + "\n\n"
     
-    # 정답 부분
     content += "[정답 및 해설: 교사용]\n\n"
     for idx, quiz in enumerate(quiz_data, 1):
         content += f"{idx}번 정답: {quiz['answer'] + 1}번\n"
@@ -103,6 +105,9 @@ st.markdown("""
     .quiz-card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(30, 58, 138, 0.1); border-left: 4px solid #1e3a8a; }
     .question-text { font-size: 1.1rem; font-weight: 600; }
     .correct-answer { background: #dcfce7; font-weight: 600; }
+    .timer-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 15px; text-align: center; margin: 2rem 0; box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4); }
+    .timer-text { font-size: 4rem; font-weight: bold; font-family: 'Courier New', monospace; }
+    .timer-label { font-size: 1.2rem; margin-bottom: 1rem; opacity: 0.9; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -122,38 +127,92 @@ if st.session_state.class_mode:
 
     st.markdown(f"""<div class="class-card"><div class="class-question">Q{current + 1}. {quiz['question']}</div>""", unsafe_allow_html=True)
 
-    for idx, option in enumerate(quiz['options']):
-        if st.session_state.show_answer and idx == quiz['answer']:
-            st.markdown(f'<div class="class-option class-answer">{idx + 1}. {option} (정답)</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="class-option">{idx + 1}. {option}</div>', unsafe_allow_html=True)
+    # === 타이머 기능 ===
+    if not st.session_state.timer_started and not st.session_state.show_answer:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            timer_duration = st.selectbox("⏱️ 생각할 시간", [10, 20, 30, 45, 60], index=2, key=f"timer_{current}")
+            if st.button("🚀 타이머 시작!", use_container_width=True, type="primary"):
+                st.session_state.timer_started = True
+                st.rerun()
+    
+    # 타이머 진행 중
+    if st.session_state.timer_started and not st.session_state.timer_finished:
+        timer_duration = st.session_state.get(f"timer_duration_{current}", 30)
+        
+        timer_placeholder = st.empty()
+        progress_placeholder = st.empty()
+        
+        for remaining in range(timer_duration, 0, -1):
+            timer_placeholder.markdown(f"""
+                <div class="timer-box">
+                    <div class="timer-label">남은 시간</div>
+                    <div class="timer-text">{remaining}</div>
+                    <div style="font-size: 1rem; margin-top: 0.5rem;">초</div>
+                </div>
+            """, unsafe_allow_html=True)
+            progress_placeholder.progress((timer_duration - remaining) / timer_duration)
+            time.sleep(1)
+        
+        # 타이머 종료
+        timer_placeholder.markdown("""
+            <div class="timer-box">
+                <div class="timer-text">⏰</div>
+                <div style="font-size: 1.5rem; margin-top: 1rem;">시간 종료!</div>
+            </div>
+        """, unsafe_allow_html=True)
+        progress_placeholder.progress(1.0)
+        st.session_state.timer_finished = True
+        time.sleep(2)
+        st.rerun()
 
-    if st.session_state.show_answer:
-        st.markdown(f"""<div class="class-explanation"><strong>🎓 선생님의 해설:</strong><br>{quiz['explanation']}</div>""", unsafe_allow_html=True)
+    # 선택지 표시 (타이머 종료 후 또는 타이머 없이 진행 시)
+    if st.session_state.timer_finished or not st.session_state.timer_started:
+        for idx, option in enumerate(quiz['options']):
+            if st.session_state.show_answer and idx == quiz['answer']:
+                st.markdown(f'<div class="class-option class-answer">{idx + 1}. {option} (정답)</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="class-option">{idx + 1}. {option}</div>', unsafe_allow_html=True)
+
+        if st.session_state.show_answer:
+            st.markdown(f"""<div class="class-explanation"><strong>🎓 선생님의 해설:</strong><br>{quiz['explanation']}</div>""", unsafe_allow_html=True)
+    
     st.markdown("</div>", unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        if not st.session_state.show_answer:
-            if st.button("👀 정답 및 해설 확인하기", use_container_width=True, type="primary"):
-                st.session_state.show_answer = True
-                st.rerun()
-        else:
-            if current < total - 1:
-                if st.button("다음 문제로 넘어가기 👉", use_container_width=True):
-                    st.session_state.current_idx += 1
-                    st.session_state.show_answer = False
+    # 버튼 영역
+    if st.session_state.timer_finished or not st.session_state.timer_started:
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            if not st.session_state.show_answer:
+                if st.button("👀 정답 및 해설 확인하기", use_container_width=True, type="primary"):
+                    st.session_state.show_answer = True
                     st.rerun()
             else:
-                if st.button("🎉 수업 종료하기 (첫 화면으로)", use_container_width=True, type="primary"):
-                    st.session_state.class_mode = False
-                    st.session_state.current_idx = 0
-                    st.session_state.show_answer = False
-                    st.rerun()
+                if current < total - 1:
+                    if st.button("다음 문제로 넘어가기 👉", use_container_width=True):
+                        st.session_state.current_idx += 1
+                        st.session_state.show_answer = False
+                        st.session_state.timer_started = False
+                        st.session_state.timer_finished = False
+                        st.rerun()
+                else:
+                    if st.button("🎉 수업 종료하기 (첫 화면으로)", use_container_width=True, type="primary"):
+                        st.session_state.class_mode = False
+                        st.session_state.current_idx = 0
+                        st.session_state.show_answer = False
+                        st.session_state.timer_started = False
+                        st.session_state.timer_finished = False
+                        st.rerun()
     
     with st.sidebar:
+        st.markdown("### ⚙️ 수업 설정")
+        if st.button("⏭️ 타이머 건너뛰기"):
+            st.session_state.timer_finished = True
+            st.rerun()
         if st.button("❌ 수업 강제 종료"):
             st.session_state.class_mode = False
+            st.session_state.timer_started = False
+            st.session_state.timer_finished = False
             st.rerun()
 
 # [B] 입력 및 생성 화면
@@ -192,17 +251,16 @@ else:
         st.markdown("### 📋 생성 결과 확인")
         
         if st.session_state.quiz_data:
-            # === 버튼 2개 배치 (수업모드 / 다운로드) ===
             b1, b2 = st.columns(2)
             with b1:
-                # [에러가 났던 부분: 괄호와 내용이 완벽하게 들어갔는지 확인하세요]
                 if st.button("👨‍🏫 수업 모드 시작", use_container_width=True, type="secondary"):
                     st.session_state.class_mode = True
                     st.session_state.current_idx = 0
                     st.session_state.show_answer = False
+                    st.session_state.timer_started = False
+                    st.session_state.timer_finished = False
                     st.rerun()
             with b2:
-                # 텍스트 파일 생성
                 txt_data = create_text_file(st.session_state.quiz_data, text_input)
                 st.download_button(
                     label="💾 퀴즈 다운로드 (.txt)",
