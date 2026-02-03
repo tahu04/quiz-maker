@@ -6,66 +6,81 @@ import json
 # 1. 페이지 설정
 # ============================================================
 st.set_page_config(
-    page_title="지문 3초 퀴즈 메이커 (AI Ver.)",
+    page_title="지문 3초 퀴즈 메이커 (Final)",
     page_icon="📝",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
 # ============================================================
-# 2. API 키 입력 받기 (사이드바)
+# 2. 안전한 JSON 파싱 함수 (이게 해결사입니다! 🦸‍♂️)
 # ============================================================
-with st.sidebar:
-    st.header("🔐 설정")
-    api_key = st.text_input("OpenAI API 키를 입력하세요", type="password")
-    st.info("발급받은 sk-... 로 시작하는 키를 입력해주세요.")
+def safe_parse_quiz(response_text):
+    try:
+        data = json.loads(response_text)
+        
+        # Case 1: {"questions": [...]} 형태로 온 경우
+        if isinstance(data, dict) and "questions" in data:
+            return data["questions"]
+        
+        # Case 2: [...] 리스트 형태로 온 경우
+        if isinstance(data, list):
+            return data
+            
+        # Case 3: 퀴즈가 1개라서 단일 { ... } 객체로 온 경우 -> 리스트로 포장
+        if isinstance(data, dict):
+            return [data]
+            
+        return []
+    except Exception as e:
+        print(f"JSON 파싱 오류: {e}")
+        return []
 
 # ============================================================
-# 3. 진짜 AI 퀴즈 생성 함수 (ChatGPT 연결)
+# 3. 진짜 AI 퀴즈 생성 함수
 # ============================================================
 def generate_real_quiz(text, difficulty, num_questions, api_key):
     client = openai.OpenAI(api_key=api_key)
     
-    # AI에게 보낼 명령서 (프롬프트)
     prompt = f"""
-    너는 현직 교사야. 아래 지문을 읽고 학생들을 위한 객관식 퀴즈를 만들어줘.
+    너는 선생님을 돕는 AI야. 아래 지문을 읽고 객관식 퀴즈를 만들어줘.
     
-    [지문 내용]:
+    [지문]:
     {text}
     
     [조건]:
     1. 난이도: {difficulty}
-    2. 문제 수: {num_questions}문제
-    3. 결과는 반드시 JSON 형식으로만 출력해. 다른 말은 하지 마.
+    2. 문제 수: {num_questions}개
+    3. 결과는 반드시 아래와 같은 'JSON 형식'으로만 출력해. (군더더기 설명 금지)
     
     [JSON 형식 예시]:
-    [
-        {{
-            "question": "문제 내용",
-            "options": ["보기1", "보기2", "보기3", "보기4"],
-            "answer": 0, (정답 인덱스 0~3)
-            "explanation": "해설 내용"
-        }}
-    ]
+    {{
+        "questions": [
+            {{
+                "question": "문제 내용",
+                "options": ["보기1", "보기2", "보기3", "보기4"],
+                "answer": 0,
+                "explanation": "해설 내용"
+            }}
+        ]
+    }}
     """
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini", # 가성비 좋은 최신 모델
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"} # JSON 모드 강제
+            response_format={"type": "json_object"}
         )
-        return json.loads(response.choices[0].message.content)['questions'] # 구조에 따라 조정 필요할 수 있음
+        # 만능 파서로 안전하게 변환
+        return safe_parse_quiz(response.choices[0].message.content)
+        
     except Exception as e:
-        # JSON 파싱 실패 시 예외 처리 (간단하게)
-        try:
-             return json.loads(response.choices[0].message.content)
-        except:
-             st.error(f"AI가 응답을 생성하지 못했습니다: {e}")
-             return []
+        st.error(f"AI 호출 중 오류 발생: {e}")
+        return []
 
 # ============================================================
-# 4. 화면 디자인 (기존 CSS 유지)
+# 4. 화면 디자인 (CSS)
 # ============================================================
 st.markdown("""
     <style>
@@ -91,15 +106,20 @@ def main():
     st.markdown('<p class="sub-title">지문을 입력하면 AI가 내용을 분석해 진짜 퀴즈를 만듭니다</p>', unsafe_allow_html=True)
     st.markdown("---")
     
+    # 사이드바에서 API 키 입력
+    with st.sidebar:
+        st.header("🔐 설정")
+        api_key = st.text_input("OpenAI API 키", type="password", help="sk-로 시작하는 키를 입력하세요")
+    
     left_col, right_col = st.columns([1, 1], gap="large")
     
     with left_col:
         st.markdown("### 📄 지문 입력")
-        text_input = st.text_area("지문 텍스트를 입력하세요", placeholder="내용을 붙여넣으세요...", height=300)
+        text_input = st.text_area("지문 텍스트를 입력하세요", placeholder="내용을 붙여넣으세요... (최소 10자 이상)", height=300)
         st.markdown("### ⚙️ 퀴즈 설정")
         col1, col2 = st.columns(2)
         with col1: difficulty = st.selectbox("난이도", ["하", "중", "상"], index=1)
-        with col2: num_questions = st.selectbox("문항 수", [3, 5], index=0)
+        with col2: num_questions = st.selectbox("문항 수", [1, 3, 5], index=1)
         st.markdown("<br>", unsafe_allow_html=True)
         generate_button = st.button("🚀 퀴즈 생성하기", use_container_width=True)
     
@@ -107,27 +127,30 @@ def main():
         st.markdown("### 📋 생성된 퀴즈")
         if generate_button:
             if not api_key:
-                st.error("🔐 왼쪽 사이드바(화살표)를 열어 API 키를 먼저 입력해주세요!")
+                st.error("🔐 왼쪽 사이드바를 열어 API 키를 먼저 입력해주세요!")
             elif not text_input or len(text_input.strip()) < 10:
-                st.warning("⚠️ 지문 텍스트를 최소 10자 이상 입력해주세요.")
+                st.warning("⚠️ 지문 텍스트를 좀 더 길게 입력해주세요.")
             else:
                 with st.spinner("AI가 지문을 읽고 문제를 출제 중입니다..."):
-                    # 실제 AI 호출
-                    try:
-                        quiz_data = generate_real_quiz(text_input, difficulty, num_questions, api_key)
-                        if quiz_data:
-                            st.success(f"✅ AI가 {len(quiz_data)}개의 문제를 만들었습니다!")
-                            # 퀴즈 표시 로직 (기존과 동일)
-                            for idx, quiz in enumerate(quiz_data, 1):
-                                st.markdown(f"""<div class="quiz-card"><div class="question-number">문제 {idx}</div><div class="question-text">{quiz['question']}</div>""", unsafe_allow_html=True)
-                                for opt_idx, option in enumerate(quiz['options']):
-                                    if opt_idx == quiz['answer']:
-                                        st.markdown(f"""<div class="option correct-answer">{opt_idx + 1}. {option} ✓</div>""", unsafe_allow_html=True)
-                                    else:
-                                        st.markdown(f"""<div class="option">{opt_idx + 1}. {option}</div>""", unsafe_allow_html=True)
-                                st.markdown(f"""<div class="explanation"><strong>💡 해설:</strong> {quiz['explanation']}</div></div>""", unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error(f"오류가 발생했습니다: {e}")
+                    quiz_data = generate_real_quiz(text_input, difficulty, num_questions, api_key)
+                    
+                    if quiz_data:
+                        st.success(f"✅ AI가 {len(quiz_data)}개의 문제를 만들었습니다!")
+                        for idx, quiz in enumerate(quiz_data, 1):
+                            st.markdown(f"""<div class="quiz-card"><div class="question-number">문제 {idx}</div><div class="question-text">{quiz.get('question', '문제 없음')}</div>""", unsafe_allow_html=True)
+                            
+                            options = quiz.get('options', [])
+                            answer_idx = quiz.get('answer', 0)
+                            
+                            for opt_idx, option in enumerate(options):
+                                if opt_idx == answer_idx:
+                                    st.markdown(f"""<div class="option correct-answer">{opt_idx + 1}. {option} ✓</div>""", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"""<div class="option">{opt_idx + 1}. {option}</div>""", unsafe_allow_html=True)
+                            
+                            st.markdown(f"""<div class="explanation"><strong>💡 해설:</strong> {quiz.get('explanation', '해설 없음')}</div></div>""", unsafe_allow_html=True)
+                    else:
+                        st.error("AI가 문제를 생성하지 못했습니다. 잠시 후 다시 시도해주세요.")
 
 if __name__ == "__main__":
     main()
