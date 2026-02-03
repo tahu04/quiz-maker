@@ -96,7 +96,7 @@ def create_text_file(quiz_data, text_input):
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
-    .class-card { background: white; border-radius: 20px; padding: 3rem; margin: 2rem auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 900px; border-top: 8px solid #1e3a8a; }
+    .class-card { background: white; border-radius: 20px; padding: 3rem; margin: 2rem auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 1200px; border-top: 8px solid #1e3a8a; }
     .class-question { font-size: 2.2rem; font-weight: 800; color: #1e3a8a; margin-bottom: 2rem; line-height: 1.4; }
     .class-option { font-size: 1.5rem; padding: 1.2rem; margin: 1rem 0; background: #f1f5f9; border-radius: 12px; color: #334155; border: 2px solid transparent; transition: all 0.3s; }
     .class-option:hover { border-color: #3b82f6; background: #e0f2fe; }
@@ -105,7 +105,7 @@ st.markdown("""
     .quiz-card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(30, 58, 138, 0.1); border-left: 4px solid #1e3a8a; }
     .question-text { font-size: 1.1rem; font-weight: 600; }
     .correct-answer { background: #dcfce7; font-weight: 600; }
-    .timer-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 15px; text-align: center; margin: 2rem 0; box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4); }
+    .timer-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 15px; text-align: center; box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4); height: 100%; display: flex; flex-direction: column; justify-content: center; }
     .timer-text { font-size: 4rem; font-weight: bold; font-family: 'Courier New', monospace; }
     .timer-label { font-size: 1.2rem; margin-bottom: 1rem; opacity: 0.9; }
     </style>
@@ -125,49 +125,15 @@ if st.session_state.class_mode:
     st.progress((current + 1) / total)
     st.markdown(f"<div style='text-align:right; color:#64748b;'>문제 {current + 1} / {total}</div>", unsafe_allow_html=True)
 
-    st.markdown(f"""<div class="class-card"><div class="class-question">Q{current + 1}. {quiz['question']}</div>""", unsafe_allow_html=True)
-
-    # === 타이머 기능 ===
-    if not st.session_state.timer_started and not st.session_state.show_answer:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            timer_duration = st.selectbox("⏱️ 생각할 시간", [10, 20, 30, 45, 60], index=2, key=f"timer_{current}")
-            if st.button("🚀 타이머 시작!", use_container_width=True, type="primary"):
-                st.session_state.timer_started = True
-                st.rerun()
+    st.markdown(f"""<div class="class-card">""", unsafe_allow_html=True)
     
-    # 타이머 진행 중
-    if st.session_state.timer_started and not st.session_state.timer_finished:
-        timer_duration = st.session_state.get(f"timer_duration_{current}", 30)
+    # === 문제와 타이머를 좌우로 배치 ===
+    question_col, timer_col = st.columns([2, 1])
+    
+    with question_col:
+        st.markdown(f"""<div class="class-question">Q{current + 1}. {quiz['question']}</div>""", unsafe_allow_html=True)
         
-        timer_placeholder = st.empty()
-        progress_placeholder = st.empty()
-        
-        for remaining in range(timer_duration, 0, -1):
-            timer_placeholder.markdown(f"""
-                <div class="timer-box">
-                    <div class="timer-label">남은 시간</div>
-                    <div class="timer-text">{remaining}</div>
-                    <div style="font-size: 1rem; margin-top: 0.5rem;">초</div>
-                </div>
-            """, unsafe_allow_html=True)
-            progress_placeholder.progress((timer_duration - remaining) / timer_duration)
-            time.sleep(1)
-        
-        # 타이머 종료
-        timer_placeholder.markdown("""
-            <div class="timer-box">
-                <div class="timer-text">⏰</div>
-                <div style="font-size: 1.5rem; margin-top: 1rem;">시간 종료!</div>
-            </div>
-        """, unsafe_allow_html=True)
-        progress_placeholder.progress(1.0)
-        st.session_state.timer_finished = True
-        time.sleep(2)
-        st.rerun()
-
-    # 선택지 표시 (타이머 종료 후 또는 타이머 없이 진행 시)
-    if st.session_state.timer_finished or not st.session_state.timer_started:
+        # 선택지 표시 (타이머와 상관없이 항상 표시)
         for idx, option in enumerate(quiz['options']):
             if st.session_state.show_answer and idx == quiz['answer']:
                 st.markdown(f'<div class="class-option class-answer">{idx + 1}. {option} (정답)</div>', unsafe_allow_html=True)
@@ -177,37 +143,89 @@ if st.session_state.class_mode:
         if st.session_state.show_answer:
             st.markdown(f"""<div class="class-explanation"><strong>🎓 선생님의 해설:</strong><br>{quiz['explanation']}</div>""", unsafe_allow_html=True)
     
+    with timer_col:
+        # === 타이머 기능 (오른쪽 컬럼에 배치) ===
+        if not st.session_state.timer_started and not st.session_state.show_answer:
+            st.markdown("### ⏱️ 타이머 설정")
+            timer_duration = st.selectbox("생각할 시간", [10, 20, 30, 45, 60], index=2, key=f"timer_{current}")
+            if st.button("🚀 타이머 시작!", use_container_width=True, type="primary"):
+                st.session_state[f"timer_duration_{current}"] = timer_duration
+                st.session_state.timer_started = True
+                st.rerun()
+        
+        # 타이머 진행 중
+        elif st.session_state.timer_started and not st.session_state.timer_finished:
+            timer_duration = st.session_state.get(f"timer_duration_{current}", 30)
+            
+            timer_placeholder = st.empty()
+            progress_placeholder = st.empty()
+            
+            for remaining in range(timer_duration, 0, -1):
+                timer_placeholder.markdown(f"""
+                    <div class="timer-box">
+                        <div class="timer-label">남은 시간</div>
+                        <div class="timer-text">{remaining}</div>
+                        <div style="font-size: 1rem; margin-top: 0.5rem;">초</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                progress_placeholder.progress((timer_duration - remaining) / timer_duration)
+                time.sleep(1)
+            
+            # 타이머 종료
+            timer_placeholder.markdown("""
+                <div class="timer-box">
+                    <div class="timer-text">⏰</div>
+                    <div style="font-size: 1.5rem; margin-top: 1rem;">시간 종료!</div>
+                </div>
+            """, unsafe_allow_html=True)
+            progress_placeholder.progress(1.0)
+            st.session_state.timer_finished = True
+            time.sleep(2)
+            st.rerun()
+        
+        # 타이머 종료 후 표시
+        elif st.session_state.timer_finished:
+            st.markdown("""
+                <div class="timer-box">
+                    <div class="timer-text">✅</div>
+                    <div style="font-size: 1.2rem; margin-top: 1rem;">타이머 완료</div>
+                </div>
+            """, unsafe_allow_html=True)
+    
     st.markdown("</div>", unsafe_allow_html=True)
 
     # 버튼 영역
-    if st.session_state.timer_finished or not st.session_state.timer_started:
-        c1, c2, c3 = st.columns([1, 2, 1])
-        with c2:
-            if not st.session_state.show_answer:
-                if st.button("👀 정답 및 해설 확인하기", use_container_width=True, type="primary"):
-                    st.session_state.show_answer = True
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        if not st.session_state.show_answer:
+            if st.button("👀 정답 및 해설 확인하기", use_container_width=True, type="primary"):
+                st.session_state.show_answer = True
+                st.rerun()
+        else:
+            if current < total - 1:
+                if st.button("다음 문제로 넘어가기 👉", use_container_width=True):
+                    st.session_state.current_idx += 1
+                    st.session_state.show_answer = False
+                    st.session_state.timer_started = False
+                    st.session_state.timer_finished = False
                     st.rerun()
             else:
-                if current < total - 1:
-                    if st.button("다음 문제로 넘어가기 👉", use_container_width=True):
-                        st.session_state.current_idx += 1
-                        st.session_state.show_answer = False
-                        st.session_state.timer_started = False
-                        st.session_state.timer_finished = False
-                        st.rerun()
-                else:
-                    if st.button("🎉 수업 종료하기 (첫 화면으로)", use_container_width=True, type="primary"):
-                        st.session_state.class_mode = False
-                        st.session_state.current_idx = 0
-                        st.session_state.show_answer = False
-                        st.session_state.timer_started = False
-                        st.session_state.timer_finished = False
-                        st.rerun()
+                if st.button("🎉 수업 종료하기 (첫 화면으로)", use_container_width=True, type="primary"):
+                    st.session_state.class_mode = False
+                    st.session_state.current_idx = 0
+                    st.session_state.show_answer = False
+                    st.session_state.timer_started = False
+                    st.session_state.timer_finished = False
+                    st.rerun()
     
     with st.sidebar:
         st.markdown("### ⚙️ 수업 설정")
         if st.button("⏭️ 타이머 건너뛰기"):
             st.session_state.timer_finished = True
+            st.rerun()
+        if st.button("🔄 타이머 초기화"):
+            st.session_state.timer_started = False
+            st.session_state.timer_finished = False
             st.rerun()
         if st.button("❌ 수업 강제 종료"):
             st.session_state.class_mode = False
@@ -282,4 +300,4 @@ else:
                             st.write(f"- {opt}")
                     st.info(f"해설: {quiz['explanation']}")
         else:
-            st.info("👈 왼쪽에서 지문을 입력하고 생성 버튼을 눌러주세요.")
+            st.info("�← 왼쪽에서 지문을 입력하고 생성 버튼을 눌러주세요.")
